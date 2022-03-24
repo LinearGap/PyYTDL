@@ -4,8 +4,8 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-pytube = "*"
-ffmpeg-python = "*"
+pytube = "~=9.6.4"
+python-ffmpeg = "~=1.0.13"
 
 [dev-packages]
 
