@@ -47,9 +47,9 @@ class PyYTDL_Downloader():
         try:
             self.__YTV.streams
             return self.__YTV.title
-        except:
+        except exception as e:
             ### Throw an exception here if the URL is invalid
-            print('error')
+            raise e
 
     def get_streams_raw(self):
         """
@@ -58,7 +58,7 @@ class PyYTDL_Downloader():
         """
         return self.__YTV.streams
 
-    def get_streams(self):
+    def get_streams(self) -> list:
         """
         Returns a list of YTVid's containing necessary info for each
         stream
@@ -86,7 +86,7 @@ class PyYTDL_Downloader():
         is made
         func: Callable[[Any, bytes, int], None]
         """
-        self.__ytv.register_on_progress_callback(callback)
+        self.__YTV.register_on_progress_callback(callback)
 
     def download_stream(self, ytvid: YTVid, download_directory="", filename="") -> str:
             """
@@ -103,8 +103,9 @@ class PyYTDL_Downloader():
             # Perform the actual download function
             try:
                 file_path = self.__YTV.streams.get_by_itag(ytvid.tag).download(output_path= download_directory, filename= filename, filename_prefix= 'tmp__')
-            except:
-                print("Download Error")
+            except Exception as e:
+                print(f"Download Error {e}")
                 file_path = ""
+                raise
             return file_path
         
