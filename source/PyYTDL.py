@@ -1,11 +1,12 @@
 import argparse
 from ast import arg
+from ctypes import c_int
 from logging import exception
 import os
 import tempfile
-from tkinter import E
 from PyYTDL_Downloader import PyYTDL_Downloader as YTDL
 from PyYTDL_Downloader import YTVid
+from PyYTDL_Converter import PyYTDL_Converter as YTConverter
 
 # Callback Method
 def download_progress_meter_callback(stream, chunk, bytes_remaining):
@@ -63,6 +64,17 @@ class PyYTDL():
         self.__temp_file_paths = self.download_streams(self.__streams, self.__temp_dir)
         print('File download complete')
 
+        # Setup the conversion
+        self.__converter = self.setup_conversion()
+
+        # Run the conversion process
+        self.convert(self.__converter)
+
+        # Process is complete and new file exists
+        self.should_open_file(self.__settings['filename'])
+
+        print(f'YouTube video transcoded into {self.__settings["filename"]}')
+
     def __parse_args(self):
         """
         Parse command line arguments into the settings list
@@ -79,10 +91,38 @@ class PyYTDL():
         args = parser.parse_args()
         self.__settings['audio only'] = args.a
         self.__settings['hq'] = args.hq
-        self.__settings['filename'] = args.o
+        self.__settings['filename'] = self.__fix_filename(args.o)
         self.__settings['resolution'] = self.__fix_resolution(args.r)
         self.__settings['open'] = args.p
         self.__YTURL = args.url
+
+    def __fix_filename(self, filename) -> str:
+        """
+        Ensure that the output filename is using the correct extensions.
+        Video - mp4, as outputs in H264 and AAC audio
+        Audio - aac, as outputs in AAC audio
+        """
+        # Default return
+        if filename == "":
+            return ""
+        
+        fixed_filename = ""
+        if self.__settings['audio only']:
+            if filename[-4] == '.':
+                fixed_filename = filename[:-4] + '.m4a'
+            elif filename[-5] == '.':
+                fixed_filename = filename[:-5] + '.m4a'
+            else:
+                fixed_filename = filename + '.m4a'
+        else:
+            if filename[-4] == '.':
+                fixed_filename = filename[:-4] + '.mp4'
+            elif filename[-5] == '.':
+                fixed_filename = filename[:-5] + '.mp4'
+            else:
+                fixed_filename = filename + '.mp4'
+
+        return fixed_filename
 
     def __fix_resolution(self, resolution) -> int:
         """
@@ -214,6 +254,7 @@ class PyYTDL():
         print('Downloading audio file:')
         try:
             audio_path = self.__downloader.download_stream(streams['audio'], filename="audio.pyA", download_directory=directory)
+            file_paths['audio'] = audio_path
         except exception as e:
             raise e
 
@@ -222,13 +263,53 @@ class PyYTDL():
             print('Downloading video file:')
             try:
                 video_path = self.__downloader.download_stream(streams['video'], filename="video.pyV", download_directory=directory)
+                file_paths['video'] = video_path
             except exception as e:
                 raise e
 
-        file_paths['audio'] = audio_path
-        file_paths['video'] = video_path
-
         return file_paths
+
+    def setup_conversion(self):
+        """
+        Use the PyYTDL_Converter to setup the conversion specs. 
+        Returns: The PyYTDL_Converter object
+        """
+        c_obj = YTConverter()
+
+        """
+        If the filename is not set, first set it to the video name
+        """
+        if self.__settings['filename'] == "":
+            self.__settings['filename'] = self.__fix_filename(self.vid_title)
+
+        if self.__settings['audio only']:
+            # Only need to pass audio streams
+            c_obj.set_audio_input(self.__temp_file_paths['audio'])
+            c_obj.set_output_file(True, self.__settings['filename'])
+        else:
+            # Set audio and video streams
+            c_obj.set_audio_input(self.__temp_file_paths['audio'])
+            c_obj.set_video_input(self.__temp_file_paths['video'])
+            c_obj.set_output_file(False, self.__settings['filename'])
+
+        return c_obj
+
+    def convert(self, conversion_object):
+        """
+        Run the actual conversion
+        """
+        print("Transcoding to output format now.")
+        try:
+            conversion_object.convert(quiet=True)
+        except:
+            raise
+
+    def should_open_file(self, filename):
+        """
+        If the flag is specified open the output file
+        """
+        if self.__settings['open']:
+            os.open(filename, os.O_RDWR)
 
 
 # ----------------------------------------------------------------------------------
